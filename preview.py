@@ -10,6 +10,11 @@ from urllib.parse import parse_qs, urlparse, urlencode
 
 from PIL import Image
 
+import types
+import sys
+sys.modules.setdefault("PIL.PyAccess", types.ModuleType("PIL.PyAccess"))
+import hqx
+
 from generate import parse_xpm, get_slot_colors, scalex
 
 ASSETS = Path("assets")
@@ -40,6 +45,14 @@ def upscale(img: Image.Image, scale: int, method: str = "scale2x") -> Image.Imag
         return img
     if method == "nn":
         return img.resize((img.width * scale, img.height * scale), Image.NEAREST)
+    if method == "hqx":
+        if scale == 2:
+            return hqx.hq2x(img)
+        elif scale == 4:
+            return hqx.hq4x(img)
+        elif scale == 8:
+            return hqx.hq2x(hqx.hq4x(img))
+        return img
     with tempfile.NamedTemporaryFile(suffix=".png") as src:
         img.save(src.name, "PNG")
         if scale == 2:
@@ -138,7 +151,7 @@ def render_page(backdrop: str | None, palette: str | None, slot: int, scale: int
         scale_options.append(f'<option value="{x}"{sel}>{x}x</option>')
 
     method_options = []
-    for m, label in [("scale2x", "Scale2x"), ("nn", "Nearest")]:
+    for m, label in [("scale2x", "Scale2x"), ("hqx", "hqx"), ("nn", "Nearest")]:
         sel = " selected" if m == method else ""
         method_options.append(f'<option value="{m}"{sel}>{label}</option>')
 
