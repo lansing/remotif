@@ -35,9 +35,11 @@ def list_palettes():
     return sorted(p.stem for p in PALETTES.glob("*.dp"))
 
 
-def upscale(img: Image.Image, scale: int) -> Image.Image:
+def upscale(img: Image.Image, scale: int, method: str = "scale2x") -> Image.Image:
     if scale == 1:
         return img
+    if method == "nn":
+        return img.resize((img.width * scale, img.height * scale), Image.NEAREST)
     with tempfile.NamedTemporaryFile(suffix=".png") as src:
         img.save(src.name, "PNG")
         if scale == 2:
@@ -57,22 +59,22 @@ def upscale(img: Image.Image, scale: int) -> Image.Image:
     return img
 
 
-def make_tile(backdrop: str, palette: str | None, slot: int, scale: int) -> Image.Image:
+def make_tile(backdrop: str, palette: str | None, slot: int, scale: int, method: str = "scale2x") -> Image.Image:
     pm_path = BACKDROPS / f"{backdrop}.pm"
     colors = get_slot_colors(str(PALETTES / f"{palette}.dp"), slot) if palette else None
     img = parse_xpm(str(pm_path), colors)
-    return upscale(img, scale)
+    return upscale(img, scale, method)
 
 
-def render_tile_png(backdrop: str, palette: str | None, slot: int, scale: int) -> bytes:
-    img = make_tile(backdrop, palette, slot, scale)
+def render_tile_png(backdrop: str, palette: str | None, slot: int, scale: int, method: str = "scale2x") -> bytes:
+    img = make_tile(backdrop, palette, slot, scale, method)
     buf = io.BytesIO()
     img.save(buf, "PNG")
     return buf.getvalue()
 
 
-def render_tiled_wallpaper(backdrop: str, palette: str | None, slot: int, scale: int, res: str) -> bytes:
-    tile = make_tile(backdrop, palette, slot, scale)
+def render_tiled_wallpaper(backdrop: str, palette: str | None, slot: int, scale: int, res: str, method: str = "scale2x") -> bytes:
+    tile = make_tile(backdrop, palette, slot, scale, method)
     tw, th = tile.size
     dw, dh = RESOLUTIONS[res]
     desktop = Image.new("RGB", (dw, dh))
@@ -91,7 +93,7 @@ def xpm_dimensions(backdrop: str) -> tuple[int, int]:
     return int(header[0]), int(header[1])
 
 
-def build_url(backdrop=None, palette=None, slot=3, scale=2, res="4K", extra=None):
+def build_url(backdrop=None, palette=None, slot=3, scale=2, res="4K", method="scale2x", extra=None):
     params = {}
     if backdrop:
         params["b"] = backdrop
@@ -103,19 +105,21 @@ def build_url(backdrop=None, palette=None, slot=3, scale=2, res="4K", extra=None
         params["x"] = str(scale)
     if res != "4K":
         params["r"] = res
+    if method != "scale2x":
+        params["m"] = method
     if extra:
         params.update(extra)
     return "/?" + urlencode(params) if params else "/"
 
 
-def render_page(backdrop: str | None, palette: str | None, slot: int, scale: int, res: str = "4K") -> str:
+def render_page(backdrop: str | None, palette: str | None, slot: int, scale: int, res: str = "4K", method: str = "scale2x") -> str:
     backdrops = list_backdrops()
     palettes = list_palettes()
 
     sidebar_items = []
     for b in backdrops:
         active = ' class="active"' if b == backdrop else ""
-        href = build_url(b, palette, slot, scale, res)
+        href = build_url(b, palette, slot, scale, res, method)
         sidebar_items.append(f'<a href="{href}"{active}>{b}</a>')
 
     palette_options = ['<option value="">-- no palette --</option>']
@@ -133,9 +137,14 @@ def render_page(backdrop: str | None, palette: str | None, slot: int, scale: int
         sel = " selected" if x == scale else ""
         scale_options.append(f'<option value="{x}"{sel}>{x}x</option>')
 
+    method_options = []
+    for m, label in [("scale2x", "Scale2x"), ("nn", "Nearest")]:
+        sel = " selected" if m == method else ""
+        method_options.append(f'<option value="{m}"{sel}>{label}</option>')
+
     bg_style = ""
     if backdrop:
-        tile_url = build_url(backdrop, palette, slot, scale, res, {"tile": "1"})
+        tile_url = build_url(backdrop, palette, slot, scale, res, method, {"tile": "1"})
         w, h = xpm_dimensions(backdrop)
         # Scale CSS size so each image pixel maps 1:1 to device pixels on 2x retina.
         # At 2x: original size (retina-perfect). At 4x/8x: proportionally larger tiles.
@@ -150,7 +159,7 @@ def render_page(backdrop: str | None, palette: str | None, slot: int, scale: int
 
     download_btns = ""
     if backdrop:
-        dl_url = build_url(backdrop, palette, slot, scale, res, {"dl": "1"})
+        dl_url = build_url(backdrop, palette, slot, scale, res, method, {"dl": "1"})
         download_btns = f'<a class="dlbtn" href="{dl_url}" download>Download {scale}x tile</a>'
         download_btns += '<a class="dlbtn dlbtn-tiled" id="dltiled" href="#" download>Download tiled wallpaper</a>'
 
@@ -211,6 +220,8 @@ body {{ display: flex; height: 100vh; font-family: 'DejaVu Serif', serif; font-s
             <div><label>Slot</label><select id="slot">{"".join(slot_options)}</select></div>
             <div><label>Scale</label><select id="scale">{"".join(scale_options)}</select></div>
         </div>
+        <label>Method</label>
+        <select id="method">{"".join(method_options)}</select>
         <label>Resolution</label>
         <select id="res">{"".join(res_options)}</select>
         {download_btns}
@@ -228,17 +239,20 @@ function go() {{
     var s = document.getElementById('slot').value;
     var x = document.getElementById('scale').value;
     var r = document.getElementById('res').value;
+    var m = document.getElementById('method').value;
     var params = new URLSearchParams();
     if (b) params.set('b', b.textContent);
     if (p) params.set('p', p);
     if (s !== '3') params.set('s', s);
     if (x !== '2') params.set('x', x);
     if (r !== '4K') params.set('r', r);
+    if (m !== 'scale2x') params.set('m', m);
     window.location = '/?' + params.toString();
 }}
 document.getElementById('palette').onchange = go;
 document.getElementById('slot').onchange = go;
 document.getElementById('scale').onchange = go;
+document.getElementById('method').onchange = go;
 var active = document.querySelector('#list a.active');
 if (active) active.scrollIntoView({{block: 'center'}});
 
@@ -248,6 +262,8 @@ if (dltiled) {{
         var params = new URLSearchParams(window.location.search);
         params.set('dlwall', '1');
         params.set('res', document.getElementById('res').value);
+        var m = document.getElementById('method').value;
+        if (m !== 'scale2x') params.set('m', m);
         dltiled.href = '/?' + params.toString();
     }}
     updateTiledHref();
@@ -307,13 +323,14 @@ class Handler(BaseHTTPRequestHandler):
         slot = int(params.get("s", ["3"])[0])
         scale = int(params.get("x", ["2"])[0])
         res = params.get("r", params.get("res", ["4K"]))[0]
+        method = params.get("m", ["scale2x"])[0]
         is_tile = "tile" in params
         is_download = "dl" in params
         is_wallpaper = "dlwall" in params
 
         if is_wallpaper and backdrop:
             try:
-                data = render_tiled_wallpaper(backdrop, palette, slot, scale, res)
+                data = render_tiled_wallpaper(backdrop, palette, slot, scale, res, method)
                 self.send_response(200)
                 self.send_header("Content-Type", "image/png")
                 parts = [backdrop]
@@ -330,7 +347,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(500, str(e))
         elif (is_tile or is_download) and backdrop:
             try:
-                data = render_tile_png(backdrop, palette, slot, scale)
+                data = render_tile_png(backdrop, palette, slot, scale, method)
                 self.send_response(200)
                 self.send_header("Content-Type", "image/png")
                 if is_download:
@@ -347,7 +364,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, str(e))
         else:
-            html = render_page(backdrop, palette, slot, scale, res)
+            html = render_page(backdrop, palette, slot, scale, res, method)
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
