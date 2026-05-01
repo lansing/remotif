@@ -295,6 +295,13 @@ class Handler(BaseHTTPRequestHandler):
 
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
+
+        if parsed.path == "/" and not params:
+            self.send_response(302)
+            self.send_header("Location", "/?b=ArtDeco&p=Broica")
+            self.end_headers()
+            return
+
         backdrop = params.get("b", [None])[0]
         palette = params.get("p", [None])[0]
         slot = int(params.get("s", ["3"])[0])
