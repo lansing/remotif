@@ -2,6 +2,14 @@
 
 Converts legacy CDE/Motif desktop backdrop assets into modern HiDPI PNGs with palette colorization and Scale2x upscaling.
 
+## Quickstart
+
+```sh
+docker run --rm -p 8089:8089 ghcr.io/lansing/remotif:latest
+```
+
+Then open http://localhost:8089
+
 ## Setup
 
 ```sh
