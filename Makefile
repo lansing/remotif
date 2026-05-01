@@ -4,7 +4,7 @@ PALETTES_DIR := $(ASSETS_DIR)/palettes
 NSCDE_REPO := https://github.com/NsCDE/NsCDE
 OUTPUT_DIR := output
 
-.PHONY: fetch-assets clean
+.PHONY: fetch-assets preview generate clean
 
 fetch-assets:
 	@mkdir -p $(ASSETS_DIR)
@@ -13,6 +13,9 @@ fetch-assets:
 		tar xz --strip-components=2 -C $(ASSETS_DIR) \
 		NsCDE-master/data/backdrops NsCDE-master/data/palettes
 	@echo "Fetched $$(ls $(BACKDROPS_DIR) | wc -l | tr -d ' ') backdrops, $$(ls $(PALETTES_DIR) | wc -l | tr -d ' ') palettes"
+
+preview:
+	uv run python preview.py
 
 generate:
 	@mkdir -p $(OUTPUT_DIR)

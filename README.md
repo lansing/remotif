@@ -24,4 +24,7 @@ uv run python generate.py assets/backdrops/Carps.pm --palette assets/palettes/Br
 
 # no palette (use default XPM colors)
 uv run python generate.py assets/backdrops/Carps.pm --scale 2
+
+# browse backdrops in the browser with live preview
+make preview
 ```

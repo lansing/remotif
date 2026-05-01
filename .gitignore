@@ -7,3 +7,4 @@ assets/
 dist/
 build/
 .python-version
+.DS_Store
