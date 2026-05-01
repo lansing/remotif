@@ -12,7 +12,7 @@ RUN curl -sL https://github.com/amadvance/scale2x/releases/download/v4.0/scale2x
 WORKDIR /app
 
 COPY pyproject.toml .
-RUN pip install --no-cache-dir pillow
+RUN pip install --no-cache-dir pillow hqx
 
 COPY generate.py preview.py Makefile ./
 
