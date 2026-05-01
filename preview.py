@@ -158,27 +158,36 @@ def render_page(backdrop: str | None, palette: str | None, slot: int, scale: int
 <html>
 <head>
 <meta charset="utf-8">
-<title>CDE Backdrop Preview</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<title>remotif</title>
 <style>
+@import url('https://cdn.jsdelivr.net/fontsource/fonts/dejavu-serif@latest/latin-400-normal.css');
+@import url('https://fonts.googleapis.com/css2?family=Uncial+Antiqua&display=swap');
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{ display: flex; height: 100vh; font-family: monospace; font-size: 13px; }}
+body {{ display: flex; height: 100vh; font-family: 'DejaVu Serif', serif; font-size: 13px; }}
 #sidebar {{
     width: 240px; min-width: 240px; background: #2b2b2b; color: #ccc;
     display: flex; flex-direction: column; border-right: 2px solid #444;
 }}
 #controls {{ padding: 8px; border-bottom: 1px solid #444; }}
 #controls label {{ display: block; margin: 4px 0 2px; color: #999; }}
-#controls select {{ width: 100%; background: #1a1a1a; color: #ccc; border: 1px solid #555; padding: 3px; font-family: monospace; }}
+#controls select {{ width: 100%; background: #1a1a1a; color: #ccc; border: 1px solid #555; padding: 3px; font-family: 'DejaVu Serif', serif; }}
 #controls .row {{ display: flex; gap: 8px; }}
 #controls .row > div {{ flex: 1; }}
 .dlbtn {{
-    display: block; margin: 8px 8px 0; padding: 6px; text-align: center;
-    background: #4a6a8a; color: #fff; text-decoration: none; border-radius: 3px; font-size: 12px;
+    display: block; margin: 8px 8px 0; padding: 5px 6px; text-align: center;
+    background: #6a6a6a; color: #fff; text-decoration: none; font-size: 12px;
+    border-top: 2px solid #999; border-left: 2px solid #999;
+    border-bottom: 2px solid #333; border-right: 2px solid #333;
 }}
-.dlbtn:hover {{ background: #5a7a9a; }}
+.dlbtn:hover {{ background: #7a7a7a; }}
+.dlbtn:active {{ border-top-color: #333; border-left-color: #333; border-bottom-color: #999; border-right-color: #999; }}
 .dlbtn-tiled {{ background: #5a6a5a; }}
 .dlbtn-tiled:hover {{ background: #6a7a6a; }}
-#list {{ flex: 1; overflow-y: auto; }}
+#list {{ flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #555 #2b2b2b; }}
+#list::-webkit-scrollbar {{ width: 10px; }}
+#list::-webkit-scrollbar-track {{ background: #2b2b2b; }}
+#list::-webkit-scrollbar-thumb {{ background: #555; border: 1px solid #333; }}
 #list a {{
     display: block; padding: 4px 8px; color: #aaa; text-decoration: none;
     border-bottom: 1px solid #333;
@@ -187,12 +196,14 @@ body {{ display: flex; height: 100vh; font-family: monospace; font-size: 13px; }
 #list a.active {{ background: #4a6a8a; color: #fff; }}
 #main {{ flex: 1; }}
 #empty {{ display: flex; align-items: center; justify-content: center; height: 100%; color: #666; font-size: 16px; }}
+#title {{ padding: 10px 8px 6px; text-align: center; font-family: 'Uncial Antiqua', serif; font-size: 20px; color: #8aa; border-bottom: 1px solid #444; letter-spacing: 2px; }}
 #keys {{ padding: 6px 8px; border-top: 1px solid #444; color: #666; font-size: 11px; line-height: 1.6; }}
 #keys kbd {{ background: #3a3a3a; padding: 1px 4px; border-radius: 2px; color: #aaa; }}
 </style>
 </head>
 <body>
 <div id="sidebar">
+    <div id="title">remotif</div>
     <div id="controls">
         <label>Palette</label>
         <select id="palette">{"".join(palette_options)}</select>
@@ -269,8 +280,19 @@ document.addEventListener('keydown', function(e) {{
 </html>"""
 
 
+FAVICON = Path("favicon.png").read_bytes() if Path("favicon.png").exists() else b""
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path in ("/favicon.png", "/favicon.ico"):
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            self.wfile.write(FAVICON)
+            return
+
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
         backdrop = params.get("b", [None])[0]
