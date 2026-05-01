@@ -15,7 +15,7 @@ import sys
 sys.modules.setdefault("PIL.PyAccess", types.ModuleType("PIL.PyAccess"))
 import hqx
 
-from generate import parse_xpm, get_slot_colors, scalex
+from generate import parse_xpm, get_slot_colors, hex16_to_rgb8, scalex
 
 ASSETS = Path("assets")
 BACKDROPS = ASSETS / "backdrops"
@@ -106,13 +106,13 @@ def xpm_dimensions(backdrop: str) -> tuple[int, int]:
     return int(header[0]), int(header[1])
 
 
-def build_url(backdrop=None, palette=None, slot=3, scale=2, res="4K", method="scale2x", extra=None):
+def build_url(backdrop=None, palette=None, slot=8, scale=2, res="4K", method="scale2x", extra=None):
     params = {}
     if backdrop:
         params["b"] = backdrop
     if palette:
         params["p"] = palette
-    if slot != 3:
+    if slot != 8:
         params["s"] = str(slot)
     if scale != 2:
         params["x"] = str(scale)
@@ -125,9 +125,31 @@ def build_url(backdrop=None, palette=None, slot=3, scale=2, res="4K", method="sc
     return "/?" + urlencode(params) if params else "/"
 
 
+def _css_rgb(rgb):
+    return f"rgb({rgb[0]},{rgb[1]},{rgb[2]})"
+
+
+def _motif_css(palette_path, slot_num):
+    """Return dict of CSS color strings for all 5 Motif-derived colors from a palette slot."""
+    colors = get_slot_colors(palette_path, slot_num)
+    return {k: _css_rgb(hex16_to_rgb8(v)) for k, v in colors.items()}
+
+
 def render_page(backdrop: str | None, palette: str | None, slot: int, scale: int, res: str = "4K", method: str = "scale2x") -> str:
     backdrops = list_backdrops()
     palettes = list_palettes()
+
+    # Sidebar theme: use CDE palette slots mapped to their traditional UI roles.
+    #   Slot 6 = dialog/menu background  → sidebar panel, buttons, list items
+    #   Slot 4 = text fields/lists       → dropdown/select inputs
+    #   Slot 1 = active window           → selected/active item highlight
+    if palette:
+        pp = str(PALETTES / f"{palette}.dp")
+        dlg = _motif_css(pp, 6)   # dialog chrome
+        txt = _motif_css(pp, 4)   # text fields
+        act = _motif_css(pp, 1)   # active accent
+    else:
+        dlg = txt = act = None
 
     sidebar_items = []
     for b in backdrops:
@@ -188,39 +210,90 @@ def render_page(backdrop: str | None, palette: str | None, slot: int, scale: int
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ display: flex; height: 100vh; font-family: 'DejaVu Serif', serif; font-size: 13px; }}
 #sidebar {{
-    width: 240px; min-width: 240px; background: #2b2b2b; color: #ccc;
-    display: flex; flex-direction: column; border-right: 2px solid #444;
+    width: 240px; min-width: 240px;
+    background: {dlg["background"] if dlg else "#2b2b2b"};
+    color: {dlg["foreground"] if dlg else "#ccc"};
+    display: flex; flex-direction: column;
+    border-right: 2px solid {dlg["bottomShadowColor"] if dlg else "#444"};
 }}
-#controls {{ padding: 8px; border-bottom: 1px solid #444; }}
-#controls label {{ display: block; margin: 4px 0 2px; color: #999; }}
-#controls select {{ width: 100%; background: #1a1a1a; color: #ccc; border: 1px solid #555; padding: 3px; font-family: 'DejaVu Serif', serif; }}
+#controls {{
+    padding: 8px;
+    border-bottom: 1px solid {dlg["bottomShadowColor"] if dlg else "#444"};
+}}
+#controls label {{
+    display: block; margin: 4px 0 2px;
+    color: {dlg["foreground"] if dlg else "#999"};
+}}
+#controls select {{
+    width: 100%; padding: 3px; font-family: 'DejaVu Serif', serif;
+    background: {txt["background"] if txt else "#1a1a1a"};
+    color: {txt["foreground"] if txt else "#ccc"};
+    border: 1px solid {txt["bottomShadowColor"] if txt else "#555"};
+}}
 #controls .row {{ display: flex; gap: 8px; }}
 #controls .row > div {{ flex: 1; }}
 .dlbtn {{
     display: block; margin: 8px 8px 0; padding: 5px 6px; text-align: center;
-    background: #6a6a6a; color: #fff; text-decoration: none; font-size: 12px;
-    border-top: 2px solid #999; border-left: 2px solid #999;
-    border-bottom: 2px solid #333; border-right: 2px solid #333;
+    text-decoration: none; font-size: 12px;
+    background: {dlg["background"] if dlg else "#6a6a6a"};
+    color: {dlg["foreground"] if dlg else "#fff"};
+    border-top: 2px solid {dlg["topShadowColor"] if dlg else "#999"};
+    border-left: 2px solid {dlg["topShadowColor"] if dlg else "#999"};
+    border-bottom: 2px solid {dlg["bottomShadowColor"] if dlg else "#333"};
+    border-right: 2px solid {dlg["bottomShadowColor"] if dlg else "#333"};
 }}
-.dlbtn:hover {{ background: #7a7a7a; }}
-.dlbtn:active {{ border-top-color: #333; border-left-color: #333; border-bottom-color: #999; border-right-color: #999; }}
-.dlbtn-tiled {{ background: #5a6a5a; }}
-.dlbtn-tiled:hover {{ background: #6a7a6a; }}
-#list {{ flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #555 #2b2b2b; }}
+.dlbtn:hover {{
+    background: {dlg["selectColor"] if dlg else "#7a7a7a"};
+}}
+.dlbtn:active {{
+    border-top-color: {dlg["bottomShadowColor"] if dlg else "#333"};
+    border-left-color: {dlg["bottomShadowColor"] if dlg else "#333"};
+    border-bottom-color: {dlg["topShadowColor"] if dlg else "#999"};
+    border-right-color: {dlg["topShadowColor"] if dlg else "#999"};
+}}
+.dlbtn-tiled {{ background: {dlg["selectColor"] if dlg else "#5a6a5a"}; }}
+.dlbtn-tiled:hover {{ background: {dlg["topShadowColor"] if dlg else "#6a7a6a"}; }}
+#list {{
+    flex: 1; overflow-y: auto; scrollbar-width: thin;
+    scrollbar-color: {dlg["bottomShadowColor"] if dlg else "#555"} {dlg["background"] if dlg else "#2b2b2b"};
+}}
 #list::-webkit-scrollbar {{ width: 10px; }}
-#list::-webkit-scrollbar-track {{ background: #2b2b2b; }}
-#list::-webkit-scrollbar-thumb {{ background: #555; border: 1px solid #333; }}
-#list a {{
-    display: block; padding: 4px 8px; color: #aaa; text-decoration: none;
-    border-bottom: 1px solid #333;
+#list::-webkit-scrollbar-track {{ background: {dlg["background"] if dlg else "#2b2b2b"}; }}
+#list::-webkit-scrollbar-thumb {{
+    background: {dlg["bottomShadowColor"] if dlg else "#555"};
+    border: 1px solid {dlg["bottomShadowColor"] if dlg else "#333"};
 }}
-#list a:hover {{ background: #3a3a3a; color: #fff; }}
-#list a.active {{ background: #4a6a8a; color: #fff; }}
+#list a {{
+    display: block; padding: 4px 8px; text-decoration: none;
+    color: {dlg["foreground"] if dlg else "#aaa"};
+    border-bottom: 1px solid {dlg["bottomShadowColor"] if dlg else "#333"};
+}}
+#list a:hover {{
+    background: {dlg["selectColor"] if dlg else "#3a3a3a"};
+    color: {dlg["foreground"] if dlg else "#fff"};
+}}
+#list a.active {{
+    background: {act["background"] if act else "#4a6a8a"};
+    color: {act["foreground"] if act else "#fff"};
+}}
 #main {{ flex: 1; }}
 #empty {{ display: flex; align-items: center; justify-content: center; height: 100%; color: #666; font-size: 16px; }}
-#title {{ padding: 10px 8px 6px; text-align: center; font-family: 'Uncial Antiqua', serif; font-size: 20px; color: #8aa; border-bottom: 1px solid #444; letter-spacing: 2px; }}
-#keys {{ padding: 6px 8px; border-top: 1px solid #444; color: #666; font-size: 11px; line-height: 1.6; }}
-#keys kbd {{ background: #3a3a3a; padding: 1px 4px; border-radius: 2px; color: #aaa; }}
+#title {{
+    padding: 10px 8px 6px; text-align: center; letter-spacing: 2px;
+    font-family: 'Uncial Antiqua', serif; font-size: 20px;
+    color: {act["background"] if act else "#8aa"};
+    border-bottom: 1px solid {dlg["bottomShadowColor"] if dlg else "#444"};
+}}
+#keys {{
+    padding: 6px 8px; font-size: 11px; line-height: 1.6;
+    border-top: 1px solid {dlg["bottomShadowColor"] if dlg else "#444"};
+    color: {dlg["foreground"] if dlg else "#666"};
+}}
+#keys kbd {{
+    padding: 1px 4px; border-radius: 2px;
+    background: {dlg["bottomShadowColor"] if dlg else "#3a3a3a"};
+    color: {dlg["foreground"] if dlg else "#aaa"};
+}}
 </style>
 </head>
 <body>
@@ -256,7 +329,7 @@ function go() {{
     var params = new URLSearchParams();
     if (b) params.set('b', b.textContent);
     if (p) params.set('p', p);
-    if (s !== '3') params.set('s', s);
+    if (s !== '8') params.set('s', s);
     if (x !== '2') params.set('x', x);
     if (r !== '4K') params.set('r', r);
     if (m !== 'scale2x') params.set('m', m);
@@ -333,7 +406,7 @@ class Handler(BaseHTTPRequestHandler):
 
         backdrop = params.get("b", [None])[0]
         palette = params.get("p", [None])[0]
-        slot = int(params.get("s", ["3"])[0])
+        slot = int(params.get("s", ["8"])[0])
         scale = int(params.get("x", ["2"])[0])
         res = params.get("r", params.get("res", ["4K"]))[0]
         method = params.get("m", ["scale2x"])[0]
