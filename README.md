@@ -1,6 +1,6 @@
-# cde-backdrop-upscaler
+# remotif
 
-Converts legacy CDE/Motif desktop backdrop assets (.pm/.xpm) into modern HiDPI PNGs with palette colorization and Scale2x upscaling.
+Converts legacy CDE/Motif desktop backdrop assets into modern HiDPI PNGs with palette colorization and Scale2x upscaling.
 
 ## Setup
 
