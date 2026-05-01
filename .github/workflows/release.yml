@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version tag
+        id: version
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          # Find highest release number for today, default to -1
+          LAST=$(gh api repos/${{ github.repository }}/tags --jq "[.[].name | select(startswith(\"${DATE}.\"))] | map(split(\".\")[3] // \"0\" | tonumber) | max // -1")
+          NEXT=$((LAST + 1))
+          VERSION="${DATE}.${NEXT}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
+
+      - name: Create release
+        run: gh release create "$VERSION" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
