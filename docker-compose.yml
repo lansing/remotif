@@ -1,0 +1,5 @@
+services:
+  preview:
+    image: ghcr.io/lansing/remotif:latest
+    ports:
+      - "8089:8089"
